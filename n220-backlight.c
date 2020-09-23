@@ -41,9 +41,9 @@ static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, cha
 
 static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,const char *buf, size_t count)
 {
-	int result, success;
-	success = kstrtoint(buf, 10, &result);
-	if (!success) {
+	int result, failure;
+	failure = kstrtoint(buf, 10, &result);
+	if (failure) {
 		return -1;
 	}
 	if(strcmp(attr->attr.name, "brightness_level") == 0) {
