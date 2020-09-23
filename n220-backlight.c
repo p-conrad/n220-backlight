@@ -16,16 +16,46 @@ static int brightness_raw;
 static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf);
 static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,const char *buf, size_t count);
 
+static struct kobject *my_kobj;
+static struct kobj_attribute level_attr = __ATTR(brightness_level, 0664, sysfs_show, sysfs_store);
+static struct kobj_attribute raw_attr = __ATTR(brightness_raw, 0664, sysfs_show, sysfs_store);
+
+// Turn the above attributes into an attribute_group so we can handle them easier
+static struct attribute *attr_list[] = {
+	&level_attr.attr,
+	&raw_attr.attr,
+	NULL
+};
+static struct attribute_group attr_group = {
+	.attrs = attr_list
+};
+
 static int __init n220_backlight_init(void)
 {
-	// get the current brightness value from the bus here
-	printk(KERN_ALERT "Hello, world\n");
+	int err;
+
+	my_kobj = kobject_create_and_add("n220-backlight", kernel_kobj);
+
+	err = sysfs_create_group(my_kobj, &attr_group);
+	if (err) {
+		printk(KERN_ERR "Failed to create the attribute group.\n");
+		kobject_put(my_kobj);
+		return err;
+	}
+
+	// TODO: get the current brightness value from the bus here
+	brightness_level = 0;
+	brightness_raw = 0;
+
+	printk(KERN_INFO "Backlight module initialized.\n");
 	return 0;
 }
 
 static void __exit n220_backlight_exit(void)
 {
-	printk(KERN_ALERT "Goodbye, cruel world\n");
+	sysfs_remove_group(my_kobj, &attr_group);
+	kobject_put(my_kobj);
+	printk(KERN_INFO "Backlight module removed.\n");
 }
 
 static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
