@@ -97,15 +97,27 @@ static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, cha
 static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,const char *buf, size_t count)
 {
 	int result, err;
+	uint8_t brightness_tmp;
+
+	if (my_device == NULL) {
+		printk(KERN_ERR "Failed to set brightness - device is not initialized.\n");
+		return -1;
+	}
+
 	err = kstrtoint(buf, 10, &result);
 	if (err) {
 		return -1;
 	}
 	if(strcmp(attr->attr.name, "brightness_level") == 0) {
 		if (result >= LEVEL_MIN && result <= LEVEL_MAX) {
+			brightness_tmp = (1 << result) - 1;
+			err = pci_write_config_byte(my_device, BRIGHTNESS_REG, brightness_tmp);
+			if (err) {
+				printk(KERN_ERR "Failed to set the new brightness value.\n");
+				return -1;
+			}
 			brightness_level = result;
-			brightness_raw = (1 << result) - 1;
-			// TODO: set the brightness here
+			brightness_raw = brightness_tmp;
 			return count;
 		}
 		else {
@@ -114,9 +126,13 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 	}
 	else if (strcmp(attr->attr.name, "brightness_raw") == 0) {
 		if (result >= RAW_MIN && result <= RAW_MAX) {
+			err = pci_write_config_byte(my_device, BRIGHTNESS_REG, result);
+			if (err) {
+				printk(KERN_ERR "Failed to set the new brightness value.\n");
+				return -1;
+			}
 			brightness_level = -1; // no longer valid
 			brightness_raw = result;
-			// TODO: set the brightness here
 			return count;
 		}
 		else {
