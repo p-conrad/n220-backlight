@@ -49,7 +49,7 @@ static struct pci_driver driver = {
 	.probe = probe,
 	.remove = remove
 };
-static struct pci_dev *device;
+static struct pci_dev *my_device;
 
 static int __init n220_backlight_init(void)
 {
@@ -128,7 +128,8 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 
 int probe(struct pci_dev *dev, const struct pci_device_id *id) {
 	int err;
-	if (device != NULL) {
+	uint8_t brightness;
+	if (my_device != NULL) {
 		printk(KERN_WARNING "PCI device already initialized.\n");
 		return -EBUSY;
 	}
@@ -137,14 +138,21 @@ int probe(struct pci_dev *dev, const struct pci_device_id *id) {
 		printk(KERN_ERR "Failed to enable the PCI device.\n");
 		return err;
 	}
-	printk(KERN_INFO "Successfully enabled PCI device.\n");
-	device = dev;
+	err = pci_read_config_byte(dev, BRIGHTNESS_REG, &brightness);
+	if (err) {
+		printk(KERN_ERR "Failed to read device configuration.\n");
+		pci_dev_put(dev);
+		return err;
+	}
+	printk(KERN_INFO "Successfully enabled PCI device, current brightness is %u.\n", brightness);
+
+	my_device = dev;
 	return 0;
 }
 
 void remove(struct pci_dev *dev) {
 	printk(KERN_INFO "PCI device removed.\n");
-	device = NULL;
+	my_device = NULL;
 }
 
 module_init(n220_backlight_init);
