@@ -2,6 +2,7 @@
 #include <linux/module.h>
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
+#include <linux/pci.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -9,6 +10,8 @@ MODULE_LICENSE("Dual BSD/GPL");
 #define LEVEL_MAX 8
 #define RAW_MIN 0
 #define RAW_MAX 255
+#define DEVICE_ID 0xa011
+#define BRIGHTNESS_REG 0xf4
 
 static int brightness_level;
 static int brightness_raw;
@@ -30,22 +33,36 @@ static struct attribute_group attr_group = {
 	.attrs = attr_list
 };
 
+static struct pci_dev *graphics_card;
+
 static int __init n220_backlight_init(void)
 {
 	int err;
+	uint8_t brightness;
 
+	// get the graphics card pci_dev struct and read the current brightness value
+	// from the configuration register
+	graphics_card = pci_get_device(PCI_VENDOR_ID_INTEL, DEVICE_ID, NULL);
+	if (!graphics_card) {
+		printk(KERN_ERR "Failed to obtain the graphics card PCI device.\n");
+		return -ENODEV;
+	}
+	err = pci_read_config_byte(graphics_card, BRIGHTNESS_REG, &brightness);
+	if (err) {
+		printk(KERN_ERR "Failed to read the current brightness value.\n");
+		pci_dev_put(graphics_card);
+		return err;
+	}
+	printk(KERN_INFO "PCI device initialized, current brightness is %u\n", brightness);
+
+	// create the kernel objects and sysfs entries for the module
 	my_kobj = kobject_create_and_add("n220-backlight", kernel_kobj);
-
 	err = sysfs_create_group(my_kobj, &attr_group);
 	if (err) {
 		printk(KERN_ERR "Failed to create the attribute group.\n");
 		kobject_put(my_kobj);
 		return err;
 	}
-
-	// TODO: get the current brightness value from the bus here
-	brightness_level = 0;
-	brightness_raw = 0;
 
 	printk(KERN_INFO "Backlight module initialized.\n");
 	return 0;
@@ -55,6 +72,7 @@ static void __exit n220_backlight_exit(void)
 {
 	sysfs_remove_group(my_kobj, &attr_group);
 	kobject_put(my_kobj);
+	pci_dev_put(graphics_card);
 	printk(KERN_INFO "Backlight module removed.\n");
 }
 
