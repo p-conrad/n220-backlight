@@ -16,6 +16,7 @@ MODULE_LICENSE("Dual BSD/GPL");
 static int brightness_level;
 static int brightness_raw;
 
+// Setup for the kernel object attributes of the above two brightness values
 static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf);
 static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,const char *buf, size_t count);
 
@@ -33,27 +34,32 @@ static struct attribute_group attr_group = {
 	.attrs = attr_list
 };
 
-static struct pci_dev *graphics_card;
+// PCI device setup and driver registration
+int probe(struct pci_dev *dev, const struct pci_device_id *id);
+void remove(struct pci_dev *dev);
+
+static const struct pci_device_id device_ids[] = {
+	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, DEVICE_ID) },
+	{ /* zeroes */ }
+};
+MODULE_DEVICE_TABLE(pci, device_ids);
+static struct pci_driver driver = {
+	.name = "n220_backlight",
+	.id_table = device_ids,
+	.probe = probe,
+	.remove = remove
+};
+static struct pci_dev *device;
 
 static int __init n220_backlight_init(void)
 {
 	int err;
-	uint8_t brightness;
 
-	// get the graphics card pci_dev struct and read the current brightness value
-	// from the configuration register
-	graphics_card = pci_get_device(PCI_VENDOR_ID_INTEL, DEVICE_ID, NULL);
-	if (!graphics_card) {
-		printk(KERN_ERR "Failed to obtain the graphics card PCI device.\n");
-		return -ENODEV;
-	}
-	err = pci_read_config_byte(graphics_card, BRIGHTNESS_REG, &brightness);
+	err = pci_register_driver(&driver);
 	if (err) {
-		printk(KERN_ERR "Failed to read the current brightness value.\n");
-		pci_dev_put(graphics_card);
+		printk(KERN_ERR "Failed to register the PCI driver.\n");
 		return err;
 	}
-	printk(KERN_INFO "PCI device initialized, current brightness is %u\n", brightness);
 
 	// create the kernel objects and sysfs entries for the module
 	my_kobj = kobject_create_and_add("n220-backlight", kernel_kobj);
@@ -61,6 +67,7 @@ static int __init n220_backlight_init(void)
 	if (err) {
 		printk(KERN_ERR "Failed to create the attribute group.\n");
 		kobject_put(my_kobj);
+		pci_unregister_driver(&driver);
 		return err;
 	}
 
@@ -72,7 +79,7 @@ static void __exit n220_backlight_exit(void)
 {
 	sysfs_remove_group(my_kobj, &attr_group);
 	kobject_put(my_kobj);
-	pci_dev_put(graphics_card);
+	pci_unregister_driver(&driver);
 	printk(KERN_INFO "Backlight module removed.\n");
 }
 
@@ -117,6 +124,27 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 		}
 	}
 	return -1;
+}
+
+int probe(struct pci_dev *dev, const struct pci_device_id *id) {
+	int err;
+	if (device != NULL) {
+		printk(KERN_WARNING "PCI device already initialized.\n");
+		return -EBUSY;
+	}
+	err = pci_enable_device(dev);
+	if (err) {
+		printk(KERN_ERR "Failed to enable the PCI device.\n");
+		return err;
+	}
+	printk(KERN_INFO "Successfully enabled PCI device.\n");
+	device = dev;
+	return 0;
+}
+
+void remove(struct pci_dev *dev) {
+	printk(KERN_INFO "PCI device removed.\n");
+	device = NULL;
 }
 
 module_init(n220_backlight_init);
