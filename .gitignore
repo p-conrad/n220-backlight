@@ -1,6 +1,11 @@
+.clangd
+arch
+include
+compile_commands.json
 modules.order
 Module.symvers
 *.o
+*.o.d
 *.ko
 *.mod
 *.cmd
