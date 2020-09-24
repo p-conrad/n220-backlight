@@ -80,6 +80,7 @@ static void __exit n220_backlight_exit(void)
 {
 	sysfs_remove_group(my_kobj, &attr_group);
 	kobject_put(my_kobj);
+	pci_dev_put(my_device);
 	pci_unregister_driver(&driver);
 	printk(KERN_INFO "Backlight module removed.\n");
 }
@@ -184,6 +185,7 @@ void remove(struct pci_dev *dev)
 {
 	// This function is called when our PCI device got removed.
 	printk(KERN_INFO "PCI device removed.\n");
+	pci_dev_put(my_device);
 	my_device = NULL;
 }
 
