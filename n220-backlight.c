@@ -55,6 +55,7 @@ static int __init n220_backlight_init(void)
 {
 	int err;
 
+	// register this driver with the kernel
 	err = pci_register_driver(&driver);
 	if (err) {
 		printk(KERN_ERR "Failed to register the PCI driver.\n");
@@ -85,6 +86,7 @@ static void __exit n220_backlight_exit(void)
 
 static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
+	// This function is called when either of the two files in sysfs is read.
 	if(strcmp(attr->attr.name, "brightness_level") == 0) {
 		return sprintf(buf, "%d", brightness_level);
 	}
@@ -96,6 +98,7 @@ static ssize_t sysfs_show(struct kobject *kobj, struct kobj_attribute *attr, cha
 
 static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,const char *buf, size_t count)
 {
+	// This function is called when either of the two files in sysfs is written to.
 	int result, err;
 	uint8_t brightness_tmp;
 
@@ -106,11 +109,13 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 
 	err = kstrtoint(buf, 10, &result);
 	if (err) {
+		printk(KERN_ERR "Invalid value received.\n");
 		return -1;
 	}
+
 	if(strcmp(attr->attr.name, "brightness_level") == 0) {
 		if (result >= LEVEL_MIN && result <= LEVEL_MAX) {
-			brightness_tmp = (1 << result) - 1;
+			brightness_tmp = (1 << result) - 1; // 2^n - 1
 			err = pci_write_config_byte(my_device, BRIGHTNESS_REG, brightness_tmp);
 			if (err) {
 				printk(KERN_ERR "Failed to set the new brightness value.\n");
@@ -118,6 +123,7 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 			}
 			brightness_level = result;
 			brightness_raw = brightness_tmp;
+			printk(KERN_INFO "Setting brightness to %u.\n", brightness_raw);
 			return count;
 		}
 		else {
@@ -133,6 +139,7 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 			}
 			brightness_level = -1; // no longer valid
 			brightness_raw = result;
+			printk(KERN_INFO "Setting brightness to %u.\n", brightness_raw);
 			return count;
 		}
 		else {
@@ -144,31 +151,38 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 
 int probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
+	// This function is called when the kernel believes it found a device we want to control.
+	// All initialization of the PCI device happens here.
 	int err;
+
 	if (my_device != NULL) {
 		printk(KERN_WARNING "PCI device already initialized.\n");
 		return -EBUSY;
 	}
+
 	err = pci_enable_device(dev);
 	if (err) {
 		printk(KERN_ERR "Failed to enable the PCI device.\n");
 		return err;
 	}
+
 	err = pci_read_config_byte(dev, BRIGHTNESS_REG, &brightness_raw);
 	if (err) {
-		printk(KERN_ERR "Failed to read device configuration.\n");
+		printk(KERN_ERR "Failed to read the brightness value from the PCI device.\n");
 		pci_dev_put(dev);
 		return err;
 	}
-	printk(KERN_INFO "Successfully enabled PCI device, current brightness is %u.\n", brightness_raw);
-	brightness_level = -1; // this is still undetermined
 
+	printk(KERN_INFO "Successfully enabled PCI device, current brightness is %u.\n", brightness_raw);
+	brightness_level = -1; // this is still undetermined because we read a raw value
 	my_device = dev;
+
 	return 0;
 }
 
 void remove(struct pci_dev *dev)
 {
+	// This function is called when our PCI device got removed.
 	printk(KERN_INFO "PCI device removed.\n");
 	my_device = NULL;
 }
