@@ -126,7 +126,8 @@ static ssize_t sysfs_store(struct kobject *kobj, struct kobj_attribute *attr,con
 	return -1;
 }
 
-int probe(struct pci_dev *dev, const struct pci_device_id *id) {
+int probe(struct pci_dev *dev, const struct pci_device_id *id)
+{
 	int err;
 	if (my_device != NULL) {
 		printk(KERN_WARNING "PCI device already initialized.\n");
@@ -150,7 +151,8 @@ int probe(struct pci_dev *dev, const struct pci_device_id *id) {
 	return 0;
 }
 
-void remove(struct pci_dev *dev) {
+void remove(struct pci_dev *dev)
+{
 	printk(KERN_INFO "PCI device removed.\n");
 	my_device = NULL;
 }
